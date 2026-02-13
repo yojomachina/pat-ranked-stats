@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+sync-data.mjs
+sync-bans-profiles.mjs
+fast-sync.mjs
+sync-to-turso.sh
 
 # vercel
 .vercel

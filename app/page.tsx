@@ -21,11 +21,20 @@ interface LeaderboardEntry {
   number_of_game_bans: number;
 }
 
+interface RecentMatch {
+  match_id: string; date: string; time_utc: string; match_type: string;
+  winner_name: string; winner_id: string; winner_elo: number; winner_elo_change: number;
+  winner_kills: number; winner_deaths: number; winner_damage: number; winner_rounds: number;
+  loser_name: string; loser_id: string; loser_elo: number; loser_elo_change: number;
+  loser_kills: number; loser_deaths: number; loser_damage: number; loser_rounds: number;
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [stats, setStats] = useState({ totalPlayers: 0, totalMatches: 0 });
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
@@ -33,6 +42,10 @@ export default function Home() {
     fetch("/api/leaderboards?type=winrate&page=1")
       .then(r => r.json())
       .then(d => setLeaderboard(d.slice(0, 10)))
+      .catch(() => {});
+    fetch("/api/recent-matches?limit=100")
+      .then(r => r.json())
+      .then(d => setRecentMatches(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
@@ -151,6 +164,49 @@ export default function Home() {
                     <td className="px-4 py-2.5 text-right font-medium text-[#ff6b35]">{p.win_rate}%</td>
                     <td className="px-4 py-2.5 text-right text-[#888]">
                       {p.total_deaths > 0 ? (p.total_kills / p.total_deaths).toFixed(2) : "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Matches */}
+      {recentMatches.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold mb-4">⚔️ Recent Matches</h2>
+          <div className="bg-[#12121a] border border-[#1e1e2e] rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#1e1e2e] text-[#888]">
+                  <th className="text-left px-4 py-2.5">Date</th>
+                  <th className="text-left px-4 py-2.5">Winner</th>
+                  <th className="text-center px-4 py-2.5">Score</th>
+                  <th className="text-right px-4 py-2.5">Loser</th>
+                  <th className="text-right px-4 py-2.5">W ELO</th>
+                  <th className="text-right px-4 py-2.5">L ELO</th>
+                  <th className="text-right px-4 py-2.5">K/D</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentMatches.map((m, i) => (
+                  <tr key={`${m.match_id}-${i}`} className="border-b border-[#1e1e2e]/50 hover:bg-[#1e1e2e]/30 transition">
+                    <td className="px-4 py-2 text-[#555] text-xs whitespace-nowrap">{m.date}<br/><span className="text-[#444]">{m.time_utc?.slice(0,5)} UTC</span></td>
+                    <td className="px-4 py-2">
+                      <Link href={`/player/${m.winner_id}`} className="text-[#4ade80] hover:underline font-medium">{m.winner_name}</Link>
+                      <span className="text-[#555] text-xs ml-2">+{m.winner_elo_change}</span>
+                    </td>
+                    <td className="px-4 py-2 text-center font-bold text-[#888]">{m.winner_rounds}-{m.loser_rounds}</td>
+                    <td className="px-4 py-2 text-right">
+                      <Link href={`/player/${m.loser_id}`} className="text-[#f87171] hover:underline font-medium">{m.loser_name}</Link>
+                      <span className="text-[#555] text-xs ml-2">{m.loser_elo_change}</span>
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs text-[#888]">{Number(m.winner_elo).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right text-xs text-[#888]">{Number(m.loser_elo).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right text-xs text-[#888]">
+                      {m.winner_kills}-{m.winner_deaths}
                     </td>
                   </tr>
                 ))}

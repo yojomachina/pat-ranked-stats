@@ -89,6 +89,11 @@ export default function PlayerPage({ params }: { params: Promise<{ steamId: stri
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [rankings, setRankings] = useState<RankingData | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardData | null>(null);
+  const [matchHistory, setMatchHistory] = useState<any[]>([]);
+  const [matchPage, setMatchPage] = useState(1);
+  const [matchTotalPages, setMatchTotalPages] = useState(0);
+  const [matchTotal, setMatchTotal] = useState(0);
+  const [matchLoading, setMatchLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const seasonParam = selectedSeason === "all" ? "" : `?season=${selectedSeason}`;
@@ -126,6 +131,19 @@ export default function PlayerPage({ params }: { params: Promise<{ steamId: stri
     }).catch(() => {});
   }, [steamId, seasonParam]);
 
+  const fetchMatches = useCallback((page: number) => {
+    setMatchLoading(true);
+    fetch(`/api/player/${steamId}/matches?page=${page}${seasonParam ? '&' + seasonParam.slice(1) : ''}`)
+      .then(r => r.json())
+      .then(d => {
+        setMatchHistory(d.matches || []);
+        setMatchTotalPages(d.totalPages || 0);
+        setMatchTotal(d.total || 0);
+        setMatchPage(d.page || 1);
+        setMatchLoading(false);
+      }).catch(() => setMatchLoading(false));
+  }, [steamId, seasonParam]);
+
   useEffect(() => {
     fetch(`/api/player/${steamId}/seasons`).then(r => r.json()).then(s => {
       if (Array.isArray(s)) setSeasons(s);
@@ -133,6 +151,7 @@ export default function PlayerPage({ params }: { params: Promise<{ steamId: stri
   }, [steamId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchMatches(1); }, [fetchMatches]);
 
   if (loading) return <div className="text-center py-20 text-[#888]">Loading...</div>;
   if (!player) return <div className="text-center py-20 text-[#888]">Player not found</div>;
@@ -816,6 +835,84 @@ export default function PlayerPage({ params }: { params: Promise<{ steamId: stri
           </div>
         </div>
       )}
+
+      {/* ===== MATCH HISTORY ===== */}
+      <div>
+        <h2 className="text-base font-bold uppercase tracking-wider mb-3">📋 Match History <span className="text-[#888] text-sm font-normal normal-case">({fmt(matchTotal)} matches)</span></h2>
+        {matchHistory.length === 0 && matchLoading ? (
+          <div className="text-[#888] text-sm py-4">Loading matches...</div>
+        ) : (
+          <>
+            <div className={`bg-[#12121a] border border-[#1e1e2e] rounded-xl overflow-hidden transition-opacity ${matchLoading ? "opacity-50" : "opacity-100"}`}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#1e1e2e] text-[#555] text-xs uppercase tracking-wider">
+                    <th className="text-left px-4 py-2.5">#</th>
+                    <th className="text-left px-4 py-2.5">Date</th>
+                    <th className="text-left px-4 py-2.5">Result</th>
+                    <th className="text-left px-4 py-2.5">Score</th>
+                    <th className="text-left px-4 py-2.5">Opponent</th>
+                    <th className="text-right px-4 py-2.5">K/D</th>
+                    <th className="text-right px-4 py-2.5">DMG</th>
+                    <th className="text-right px-4 py-2.5">ELO</th>
+                    <th className="text-right px-4 py-2.5">Δ ELO</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matchHistory.map((m: any, i: number) => {
+                    const isWin = m.side === "winner";
+                    const eloChange = Number(m.elo_change);
+                    const matchNum = (matchPage - 1) * 25 + i + 1;
+                    return (
+                      <tr key={`${m.match_id}-${i}`} className="border-b border-[#1e1e2e]/50 hover:bg-[#1e1e2e]/30 transition">
+                        <td className="px-4 py-2 text-[#555] text-xs">{matchNum}</td>
+                        <td className="px-4 py-2 text-xs text-[#888] whitespace-nowrap">{m.date} <span className="text-[#555]">{String(m.time_utc || '').slice(0, 5)}</span></td>
+                        <td className="px-4 py-2">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${isWin ? "bg-[#4ade80]/20 text-[#4ade80]" : "bg-[#f87171]/20 text-[#f87171]"}`}>
+                            {isWin ? "WIN" : "LOSS"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 font-bold text-[#888]">{m.rounds_won}-{m.opp_rounds}</td>
+                        <td className="px-4 py-2">
+                          <Link href={`/player/${m.opp_steam_id}`} className="hover:text-[#ff6b35] transition">{m.opp_name}</Link>
+                          <span className="text-[#555] text-xs ml-2">({fmt(Number(m.opp_elo))})</span>
+                        </td>
+                        <td className="px-4 py-2 text-right text-[#888]">{m.kills}-{m.deaths}</td>
+                        <td className="px-4 py-2 text-right text-[#888]">{m.damage}</td>
+                        <td className="px-4 py-2 text-right text-[#888]">{fmt(Number(m.elo))}</td>
+                        <td className={`px-4 py-2 text-right font-bold ${eloChange >= 0 ? "text-[#4ade80]" : "text-[#f87171]"}`}>
+                          {eloChange >= 0 ? "+" : ""}{eloChange}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {matchTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <button
+                  onClick={() => fetchMatches(matchPage - 1)}
+                  disabled={matchPage <= 1}
+                  className="px-3 py-1.5 bg-[#1e1e2e] rounded text-sm disabled:opacity-30 hover:bg-[#2a2a3e] transition"
+                >
+                  ← Prev
+                </button>
+                <span className="text-[#888] text-sm">
+                  Page {matchPage} of {matchTotalPages}
+                </span>
+                <button
+                  onClick={() => fetchMatches(matchPage + 1)}
+                  disabled={matchPage >= matchTotalPages}
+                  className="px-3 py-1.5 bg-[#1e1e2e] rounded text-sm disabled:opacity-30 hover:bg-[#2a2a3e] transition"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Footer */}
       <div className="text-center text-[#333] text-xs pt-4 border-t border-[#1e1e2e]">
